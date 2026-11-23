@@ -1,0 +1,97 @@
+@baseUrl = http://localhost:3000
+
+### 1. GET All Sample Requests (200 OK)
+GET {{baseUrl}}/samples
+Accept: application/json
+
+###
+
+### 2. GET Single Sample Request by ID (200 OK)
+GET {{baseUrl}}/samples/SMPL-101
+Accept: application/json
+
+###
+
+### 3. POST Create New Sample Request (201 Created)
+POST {{baseUrl}}/samples
+Content-Type: application/json
+
+{
+  "buyerName": "Elena Rossi",
+  "companyName": "Milano Spezie S.r.l.",
+  "email": "e.rossi@milanospezie.it",
+  "phone": "+39 02 9912 4410",
+  "country": "Italy",
+  "city": "Milano",
+  "postalCode": "20123",
+  "shippingAddress": "Via Torino 88, Suite 4B, 20123 Milano, Italy",
+  "courierService": "DHL Express International",
+  "commodity": "Indonesian Nutmeg (Biji Pala)",
+  "grade": "Grade A (Premium)",
+  "weightGrams": 500,
+  "requiresCoa": true,
+  "requestDate": "2026-11-23"
+}
+
+###
+
+### 4. PATCH Update Sample Status & Notes (200 OK)
+PATCH {{baseUrl}}/samples/SMPL-105
+Content-Type: application/json
+
+{
+  "status": "Shipped / Dispatched",
+  "dispatchNotes": "Paket sampel telah diserahkan ke kurir DHL Express Jakarta dengan COA terlampir."
+}
+
+###
+
+### 5. DELETE Sample Request (200 OK)
+DELETE {{baseUrl}}/samples/SMPL-105
+Accept: application/json
+
+###
+
+### 6. Error Test - NotFoundException (404 Not Found)
+GET {{baseUrl}}/samples/SMPL-999
+Accept: application/json
+
+###
+
+### 7. Error Test - ConflictException Duplicate Tracking AWB (409 Conflict)
+POST {{baseUrl}}/samples
+Content-Type: application/json
+
+{
+  "buyerName": "Lukas Meyer",
+  "companyName": "Frankfurt Spice AG",
+  "country": "Germany",
+  "shippingAddress": "Mainzer Landstrasse 50, 60325 Frankfurt, Germany",
+  "commodity": "Mace (Fuli / Bunga Pala)",
+  "grade": "Grade A (Premium)",
+  "weightGrams": 250,
+  "trackingAwb": "DHL-9482-1049-DE"
+}
+
+###
+
+### 8. Error Test - Global ValidationPipe DTO Error (400 Bad Request)
+POST {{baseUrl}}/samples
+Content-Type: application/json
+
+{
+  "buyerName": "Al",
+  "companyName": "",
+  "country": "X",
+  "shippingAddress": "Short",
+  "commodity": "Black Pepper",
+  "grade": "Super",
+  "weightGrams": 10,
+  "requestDate": "invalid-date"
+}
+
+###
+
+### 9. Reset Seed Data (200 OK)
+POST {{baseUrl}}/samples/reset
+Accept: application/json

@@ -1,175 +1,169 @@
-# Ryco Spices - Unified React Ecosystem Platform
+# Ryco Spices — Fullstack Export Sample Tracking Platform (Bab 9: NestJS Dasar + Struktur MVC)
 
-## 1. Project Overview & Architecture
-Ryco Spices is an enterprise-grade digital trade platform for an Indonesian spice exporter. The system connects traditional agroforestry smallholders across the Spice Islands (Banda Neira, Ambon, and Sulawesi) directly with international wholesale spice importers, extractors, and food processors across Europe, North America, and Asia.
-
-This repository (`Project-PPW`) unites two specialized React applications sharing a centralized branding, asset, and design system:
-
-1. **`ryco-spices-react` (Application 1 - Public B2B Export Website)**:
-   A multi-page Single Page Application (SPA) powered by React Router DOM v6, offering a 5-page public customer journey for international commodity buyers, technical laboratory specifications, market bulletins, and an interactive Request for Quotation (RFQ) sample form.
-2. **`ryco-sample-portal` (Application 2 - Internal B2B Sample Tracking Portal)**:
-   An operational management application built for internal logistics coordinators to log, monitor, filter, and track international courier sample consignments dispatched via DHL and FedEx with live statistical aggregation.
+**Ryco Spices** adalah platform perdagangan digital B2B untuk eksportir rempah Indonesia (Maluku & Sulawesi) yang menghubungkan informasi katalog ekspor dengan sistem operasional pengiriman sampel internasional. Pada tahap **Bab 9 (NestJS Dasar + Struktur MVC)**, repository ini melanjutkan proyek fullstack React sebelumnya (`Project-PPW`) dengan menambahkan backend REST API berbasis **NestJS** yang terhubung langsung ke aplikasi frontend **`ryco-sample-portal`**.
 
 ---
 
-## 2. Directory Layout
+## 1. Data Utama & Arsitektur MVC Backend
+
+- **Data Utama (Resource)**: `samples` — **Permintaan Sampel Ekspor Rempah B2B** (`SMPL-101`, `SMPL-102`, dst.).
+- **Pola Arsitektur**: **MVC / Modular NestJS**:
+  - **Model / Entity**: `ryco-backend/src/samples/entities/sample.entity.ts` (`Sample`, `SampleStatus`, `VALID_COMMODITIES`, `VALID_GRADES`)
+  - **DTO & Validasi**: `ryco-backend/src/samples/dto/create-sample.dto.ts` dan `update-sample.dto.ts` menggunakan `class-validator` + `class-transformer` + `@nestjs/mapped-types`
+  - **Service (Business Logic & In-Memory Store)**: `ryco-backend/src/samples/samples.service.ts`
+  - **Controller (HTTP Routing & Dependency Injection)**: `ryco-backend/src/samples/samples.controller.ts`
+  - **View (Frontend Client)**: `ryco-sample-portal/` (React + Vite) terhubung via `src/services/samplesApi.js`
+
+---
+
+## 2. Struktur Direktori
 
 ```text
-Project-PPW/
-|-- README.md                       # Master technical documentation
-|-- .gitignore                      # Ignore node_modules, build dist, and cache
-|
-|-- ryco-spices-react/              # Application 1: Main Public B2B Web App
-|   |-- src/
-|   |   |-- pages/                  # 5 Routes: Home, About, Products, News, Contact
-|   |   |-- components/             # Navbar, Footer, ArticleModal, ToastNotification, ScrollToTop
-|   |   |-- data/                   # Product specifications catalog & harvest news articles
-|   |   |-- App.jsx                 # Client-side routing with react-router-dom
-|   |   |-- index.css               # Bootstrap 5.3 brand tokens and component styling
-|   |   `-- main.jsx                # Application root entry point
-|   |-- public/                     # Static assets, spice imagery (.webp) & brand favicons
-|   |-- screenshots/                # Verification screenshots
-|   |-- index.html                  # HTML entry point with typography preconnects
-|   |-- vite.config.js              # Vite configuration
-|   |-- README.md                   # Application-specific documentation
-|   `-- package.json
-|
-`-- ryco-sample-portal/             # Application 2: Internal B2B Sample Tracking Portal
-    |-- src/
-    |   |-- components/             # Header, StatsSummary, SampleForm, SampleList, SampleCard, SampleDetailModal, EmptyState
-    |   |-- constants/              # Spices taxonomy, dependent grades, global countries
-    |   |-- App.jsx                 # Stateful tracking tabs (Monitoring vs New Sample Form)
-    |   |-- index.css               # Portal dashboard styles
-    |   `-- main.jsx                # Portal entry point
-    |-- public/                     # Brand favicons & SVG vector icons
-    |-- screenshots/                # Verification screenshots
-    |-- index.html                  # HTML entry point
-    |-- vite.config.js              # Vite configuration
-    |-- README.md                   # Application-specific documentation
-    `-- package.json
+Project-PPW-NestJS/
+├── README.md
+├── docs/
+│   └── screenshots/                  # 14 screenshot tahapan CLI, REST Client, & Integrasi Fullstack
+├── ryco-backend/                     # Backend NestJS (Port 3000)
+│   ├── requests/
+│   │   └── samples.http              # Koleksi pengujian REST Client (CRUD + Error Cases)
+│   └── src/
+│       ├── main.ts                   # Global ValidationPipe + CORS + Bootstrap
+│       ├── app.module.ts
+│       └── samples/
+│           ├── dto/
+│           │   ├── create-sample.dto.ts
+│           │   └── update-sample.dto.ts
+│           ├── entities/
+│           │   └── sample.entity.ts
+│           ├── samples.controller.ts
+│           ├── samples.controller.spec.ts
+│           ├── samples.module.ts
+│           ├── samples.service.ts
+│           └── samples.service.spec.ts
+├── ryco-sample-portal/               # Frontend Operasional Sample Portal (Port 5174)
+│   └── src/
+│       ├── services/samplesApi.js    # Fetch client ke http://localhost:3000/samples
+│       ├── components/               # Header, StatsSummary, SampleForm, SampleList, SampleCard, SampleDetailModal, EmptyState
+│       └── App.jsx
+└── ryco-spices-react/                # Aplikasi Publik Katalog & Profil Perusahaan (Port 5173)
 ```
 
 ---
 
-## 3. Technology Stack & Specifications
+## 3. Desain Entity, DTO Validasi, dan Exception Handling
 
-| Component | Application 1: `ryco-spices-react` | Application 2: `ryco-sample-portal` |
-| :--- | :--- | :--- |
-| **Role** | Public B2B Corporate Website | Internal Sample Dispatch & Operations Portal |
-| **Framework** | React 19 / 18 | React 19 / 18 |
-| **Bundler & Tooling**| Vite 8.3 | Vite 8.3 |
-| **Routing** | React Router DOM v6 (5 routes) | Stateful Tabbed Navigation (`useState`) |
-| **Styling** | Bootstrap 5.3.3 + Bootstrap Icons | Custom Exporter CSS Design System + Bootstrap Icons |
-| **Color Tokens** | Primary Forest (#2D5016), Gold (#C9A959), Cream (#FAF7F2) | Forest Green (#2D5016), Harvest Gold (#C9A959) |
-| **Typography** | Playfair Display (Serif) + Plus Jakarta Sans | Playfair Display + Plus Jakarta Sans |
-| **Port** | `http://localhost:5173` | `http://localhost:5174` |
+### A. Entity `Sample` (`sample.entity.ts`)
+Menggunakan lebih dari 5 field dengan tipe data bervariasi:
+- `id` (`string`), `buyerName` (`string`), `companyName` (`string`), `email` (`string`), `phone` (`string`), `country` (`string`), `city` (`string`), `postalCode` (`string`), `shippingAddress` (`string`), `courierService` (`string`), `trackingAwb` (`string`), `commodity` (`string`), `grade` (`string`)
+- `weightGrams` (`number`) — berat fisik sampel dalam gram (`250`, `500`, `1000`, `2000`)
+- `requiresCoa` (`boolean`) — status kewajiban lampiran sertifikat uji laboratorium (COA)
+- `requestDate` (`string` ISO date `YYYY-MM-DD`) & `createdAt` (`string` ISO timestamp)
+- `status` (`enum SampleStatus`: `'Pending Review' | 'Shipped / Dispatched' | 'Delivered'`)
 
----
+### B. Validasi DTO & Global `ValidationPipe`
+Diaktifkan secara global di `src/main.ts` (`whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`) dengan aturan `class-validator`:
+- `@IsString()`, `@IsNotEmpty()`, `@MinLength(3)` / `@MinLength(10)` pada `buyerName`, `companyName`, `shippingAddress`
+- `@IsIn(VALID_COMMODITIES)` & `@IsIn(VALID_GRADES)` pada komoditas dan grade ekspor
+- `@Type(() => Number)`, `@IsInt()`, `@Min(100)`, `@Max(10000)` pada `weightGrams`
+- `@IsOptional()`, `@IsEmail()`, `@IsBoolean()`, `@IsDateString()`, `@IsEnum(SampleStatus)` pada field opsional & pembaruan (`UpdateSampleDto extends PartialType(CreateSampleDto)`)
 
-## 4. Application Breakdown
-
-### Application 1: `ryco-spices-react` (Public Exporter Portal)
-- **Home (`/`)**:
-  - Hero header with dual CTAs ("Request a Sample", "View Products").
-  - Four key performance metrics: 2,000+ Years Heritage, 4 Premium Varieties, 3 Island Origins, 24h Response.
-  - Featured export product cards: Whole Nutmeg, Mace (Bunga Pala), Cloves (Cengkeh), and Cinnamon (Cassia Vera).
-  - Corporate profile spotlight detailing sustainable agroforestry in Banda Neira and Sulawesi.
-  - Export certifications banner (Phytosanitary, Certificate of Origin, COA, Maritime Fumigation).
-- **About Us (`/about`)**:
-  - Generational spice heritage narrative from Maluku and North Sulawesi.
-  - Mission and Vision statements for ethical direct-trade spice export.
-  - Five core values: Integrity, Quality, Transparency, Partnership, and Heritage.
-  - Volcanic terroir advantages: mineral-rich soil, elevated essential oil concentrations, and complete lot traceability.
-- **Products (`/products`)**:
-  - Dynamic commodity filter tabs (*All Spices*, *Nutmeg*, *Mace*, *Cloves*, *Cinnamon*).
-  - Technical specification parameter tables (Moisture %, Volatile Essential Oil %, Foreign Matter %, Aflatoxin limits).
-  - Commercial grading cards (Grade A ABCD Sound, Grade B, FAQ/BWP, CG1, Kaastock).
-  - Packaging solutions: multi-wall paper bags, export jute bags with poly-liners, and container desiccant poles.
-- **News & Insights (`/news`)**:
-  - Featured seasonal harvest bulletin from the Banda Neira archipelago.
-  - Five category filter tabs (*All Insights*, *Harvest Reports*, *Export Standards*, *Sustainability*, *Market Trends*).
-  - Six in-depth trade reports with reading times, dates, and an interactive modal reader dialog.
-  - Controlled newsletter subscription form with instant feedback.
-- **Contact & RFQ (`/contact`)**:
-  - Controlled B2B Sample & Quotation Form with complete validation and physical courier delivery coordinates for air-freight dispatch.
-  - Office and sourcing hub coordinates (Jakarta Headquarters, Banda Neira Hub, Manado Hub).
-  - Interactive five-item international trade FAQ accordion (MOQ, sample policies, payment terms, transit lead times).
-
-### Application 2: `ryco-sample-portal` (Internal Operations System)
-- **Monitoring Dashboard**:
-  - Dynamic metrics calculation: Total Requests, Dispatched Packages, Delivered Samples, Pending Approvals.
-  - Search and filter controls by keyword, commodity type, and courier status.
-  - Dependent grade dropdown selectors ensuring botanical taxonomy integrity.
-  - Card-based tracking interface displaying courier air waybill coordinates, recipient company, and destination port.
-  - Empty-state conditional rendering handling zero-search results and empty dispatch queues.
+### C. Penanganan Error (Built-in NestJS Exceptions)
+1. **`NotFoundException` (404)**: Saat `GET /samples/:id`, `PATCH /samples/:id`, atau `DELETE /samples/:id` dipanggil dengan ID yang tidak ditemukan (misal `SMPL-999`).
+2. **`ConflictException` (409)**: Saat membuat atau memperbarui data dengan nomor resi `trackingAwb` duplikat, atau membuat permintaan sampel aktif (`Pending Review`) ganda untuk perusahaan, komoditas, dan grade yang sama.
+3. **`BadRequestException` (400)**: Saat payload DTO melanggar validasi `ValidationPipe` atau payload `PATCH` kosong.
 
 ---
 
-## 5. Prerequisites & Simultaneous Execution
+## 4. Daftar Endpoint REST API
 
-### Prerequisites
-- Node.js version 18.0.0 or higher
-- npm version 9.0.0 or higher
-- Git version 2.30 or higher
+| Method | Endpoint | Deskripsi | Status Sukses |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/samples` | Mengambil seluruh daftar permintaan sampel (mendukung query `?commodity=`, `?status=`, `?search=`) | `200 OK` |
+| `GET` | `/samples/:id` | Mengambil detail satu permintaan sampel berdasarkan ID | `200 OK` |
+| `POST` | `/samples` | Menambahkan permintaan sampel ekspor baru | `201 Created` |
+| `PATCH` | `/samples/:id` | Memperbarui sebagian data / status / catatan dispatch sampel | `200 OK` |
+| `DELETE` | `/samples/:id` | Menghapus permintaan sampel berdasarkan ID | `200 OK` |
+| `POST` | `/samples/reset` | Mengembalikan 4 data awal B2B ke memori | `200 OK` |
 
-### Step 1: Install Dependencies
-Open a terminal in the project root and install dependencies for both applications:
+---
 
+## 5. Cara Menjalankan Aplikasi (Fullstack)
+
+### 1. Jalankan Backend NestJS (`http://localhost:3000`)
 ```bash
-# Install dependencies for Application 1
-cd ryco-spices-react
+cd ryco-backend
 npm install
-cd ..
+npm run start:dev
+```
+Untuk menjalankan unit test & e2e test backend:
+```bash
+cd ryco-backend
+npm test
+npm run test:e2e
+```
 
-# Install dependencies for Application 2
+### 2. Jalankan Frontend Portal Sampel (`http://localhost:5174`)
+```bash
 cd ryco-sample-portal
 npm install
-cd ..
-```
-
-### Step 2: Start Both Development Servers Simultaneously
-Open two terminal windows or run the processes concurrently:
-
-**Terminal 1 (Public B2B Application on Port 5173)**:
-```bash
-cd ryco-spices-react
-npm run dev -- --port 5173
-```
-Accessible at: **`http://localhost:5173/`**
-
-**Terminal 2 (Internal Sample Portal on Port 5174)**:
-```bash
-cd ryco-sample-portal
 npm run dev -- --port 5174
 ```
-Accessible at: **`http://localhost:5174/`**
+
+*(Opsional) Jalankan aplikasi website publik pada port `5173`:*
+```bash
+cd ryco-spices-react
+npm install
+npm run dev -- --port 5173
+```
 
 ---
 
-## 6. Verification Screenshots
+## 6. Dokumentasi Screenshot Setiap Tahapan
 
-All visual verification captures are organized in their respective `screenshots/` folders:
+### Tahap 1 — Pembuatan Resource dengan Nest CLI & Bootstrap Server
+![Nest CLI Resource](docs/screenshots/01_nest_cli_resource.png)
 
-### `ryco-spices-react/screenshots/`
-- `01_home_desktop.png`: Full desktop homepage view with Hero, Stats, Product cards, and Certifications.
-- `01_home_mobile.png`: Mobile viewport view (390x844) displaying the responsive navigation menu in its expanded state.
-- `02_about_page.png`: Complete About Us view with heritage narrative, mission, vision, values, and origin advantages.
-- `03_products_page.png`: Products catalog view with commodity filter tabs, technical parameters, and grading cards.
-- `04_news_page.png`: News and insights view with featured harvest report, category tabs, and article cards.
-- `04_news_modal_reader.png`: Interactive modal reading dialog rendering the full technical harvest report.
-- `05_contact_sample_form.png`: Contact view showcasing the filled controlled B2B sample form and interactive FAQ accordion.
+### Tahap 2 — Pengujian Endpoint via REST Client (`ryco-backend/requests/samples.http`)
 
-### `ryco-sample-portal/screenshots/`
-- `01_initial_vite_running.png`: Vite development server initialization confirmation.
-- `02_sample_portal_overview.png`: Internal sample portal dashboard with statistics overview and monitoring cards.
-- `03_sample_form_interaction.png`: Controlled new sample dispatch registration form with dependent dropdowns.
-- `04_empty_state_conditional_rendering.png`: Empty-state conditional rendering when filter yields no matches.
+#### `GET /samples` (200 OK)
+![REST GET All](docs/screenshots/02_rest_get_all.png)
 
----
+#### `GET /samples/SMPL-101` (200 OK)
+![REST GET One](docs/screenshots/03_rest_get_one.png)
 
-## 7. Quality Standards & Regulatory Compliance
-- **Indonesia Agricultural Quarantine Agency**: Phytosanitary Certification for all agricultural exports.
-- **Ministry of Trade Republic of Indonesia**: Certificate of Origin (COO Form A, Form D, and General COO).
-- **European Commission Regulation (EU) 2023/915**: Maximum allowable residue limits for Aflatoxin B1 (< 5 ppb) and total Aflatoxins (< 10 ppb).
-- **United States FDA & ASTA Guidelines**: Cleanliness specifications for imported whole tree spices.
-- **International Maritime Organization (IMO)**: Standardized maritime fumigation and container moisture condensation protocols.
+#### `POST /samples` (201 Created)
+![REST POST Create](docs/screenshots/04_rest_post_create.png)
+
+#### `PATCH /samples/SMPL-105` (200 OK)
+![REST PATCH Update](docs/screenshots/05_rest_patch_update.png)
+
+#### `DELETE /samples/SMPL-105` (200 OK)
+![REST DELETE Remove](docs/screenshots/06_rest_delete_remove.png)
+
+### Tahap 3 — Pengujian Skenario Error Handling (404, 409, 400)
+
+#### `NotFoundException` — `GET /samples/SMPL-999` (404 Not Found)
+![REST 404 Not Found](docs/screenshots/07_rest_error_not_found_404.png)
+
+#### `ConflictException` — Duplicate Tracking AWB (409 Conflict)
+![REST 409 Conflict](docs/screenshots/08_rest_error_conflict_409.png)
+
+#### Global `ValidationPipe` — DTO Invalid Payload (400 Bad Request)
+![REST 400 Validation Error](docs/screenshots/09_rest_error_validation_400.png)
+
+### Tahap 4 — Integrasi Fullstack Frontend (`ryco-sample-portal`) + Backend (`ryco-backend`)
+
+#### 1. Halaman Monitoring Terhubung ke NestJS API (`GET /samples`)
+![Frontend Connected List](docs/screenshots/10_frontend_connected_list.png)
+
+#### 2. Form Tambah Permintaan Sampel Baru
+![Frontend Create Form](docs/screenshots/11_frontend_create_form.png)
+
+#### 3. Hasil Setelah Menambah Data (`POST /samples` -> `SMPL-105`)
+![Frontend After Create](docs/screenshots/12_frontend_after_create.png)
+
+#### 4. Hasil Setelah Mengubah Status via Detail Dossier (`PATCH /samples/SMPL-105`) & Reload Halaman
+![Frontend After Update](docs/screenshots/13_frontend_after_update.png)
+
+#### 5. Hasil Setelah Menghapus Data (`DELETE /samples/SMPL-105`)
+![Frontend After Delete](docs/screenshots/14_frontend_after_delete.png)
