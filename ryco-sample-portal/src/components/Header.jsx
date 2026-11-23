@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * Header Component
- * Displays Ryco Spices brand identity, portal title, and operational sourcing status.
+ * Displays Ryco Spices brand identity, portal title, and live NestJS API connection status.
  */
 export default function Header() {
   return (
@@ -21,7 +21,7 @@ export default function Header() {
         <div className="portal-header__actions">
           <div className="portal-badge-session">
             <span className="pulse-dot"></span>
-            <span>Active Sourcing Session (Maluku &amp; Jakarta Hubs)</span>
+            <span>Connected to NestJS API · localhost:3000</span>
           </div>
         </div>
       </div>

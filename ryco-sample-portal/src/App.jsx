@@ -1,198 +1,210 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import EmptyState from './components/EmptyState';
 import Header from './components/Header';
-import StatsSummary from './components/StatsSummary';
+import SampleDetailModal from './components/SampleDetailModal';
 import SampleForm from './components/SampleForm';
 import SampleList from './components/SampleList';
-import EmptyState from './components/EmptyState';
-import SampleDetailModal from './components/SampleDetailModal';
+import StatsSummary from './components/StatsSummary';
+import {
+  createSample,
+  deleteSample,
+  getSamples,
+  resetSamples,
+  updateSample,
+} from './services/samplesApi';
 
-// 4 Realistic Initial B2B International Export Sample Requests with full shipping & courier dossier
-const initialSampleData = [
-  {
-    id: 'SMPL-101',
-    buyerName: 'Hans Schneider',
-    companyName: 'Bavaria Spices GmbH',
-    email: 'h.schneider@bavariaspices.de',
-    phone: '+49 170 882910',
-    country: 'Germany',
-    city: 'Hamburg',
-    postalCode: '20457',
-    shippingAddress: 'Industriestrasse 42, Speicherstadt Warehouse #4, 20457 Hamburg, Germany',
-    courierService: 'DHL Express International',
-    trackingAwb: 'DHL-9482-1049-DE',
-    commodity: 'Indonesian Nutmeg (Biji Pala)',
-    grade: 'Grade A (Premium)',
-    sampleWeight: '500 gram (Standard Evaluation Kit)',
-    packagingType: 'Vacuum-Sealed Foil Bag + Outer Rigid Export Box',
-    dispatchNotes: 'Buyer requires low aflatoxin COA and volatile oil > 6.5%. Sample approved for air courier dispatch.',
-    requestDate: '2026-10-22',
-    status: 'Pending Review',
-  },
-  {
-    id: 'SMPL-102',
-    buyerName: 'Kenji Tanaka',
-    companyName: 'Nippon Food Trading Corp',
-    email: 'k.tanaka@nipponfood.co.jp',
-    phone: '+81 3 5555 0142',
-    country: 'Japan',
-    city: 'Tokyo',
-    postalCode: '104-0045',
-    shippingAddress: 'Chuo-ku Tsukiji 4-14-1, Wholesale Center Bld 3F, Tokyo 104-0045, Japan',
-    courierService: 'FedEx International Priority',
-    trackingAwb: 'FDX-8831-5520-JP',
-    commodity: 'Mace (Fuli / Bunga Pala)',
-    grade: 'Grade A (Premium)',
-    sampleWeight: '250 gram (Micro-Sample Kit)',
-    packagingType: 'Nitrogen-Flushed Aluminum Pouch + Protective Outer Carton',
-    dispatchNotes: 'Sent via priority air courier for sensory and color pigment analysis.',
-    requestDate: '2026-10-23',
-    status: 'Shipped / Dispatched',
-  },
-  {
-    id: 'SMPL-103',
-    buyerName: 'Pieter van Dijk',
-    companyName: 'Rotterdam Commodity House B.V.',
-    email: 'pvandijk@rotterdamspice.nl',
-    phone: '+31 10 442 8890',
-    country: 'Netherlands',
-    city: 'Rotterdam',
-    postalCode: '3089 JH',
-    shippingAddress: 'Waalhaven Zuidzijde 21, Haven 2210, 3089 JH Rotterdam, Netherlands',
-    courierService: 'DHL Express International',
-    trackingAwb: 'DHL-4412-9011-NL',
-    commodity: 'Zanzibar Cloves (Cengkeh)',
-    grade: 'Grade A (Premium)',
-    sampleWeight: '1000 gram (1 kg Comparative Box)',
-    packagingType: 'Double Poly-Lined Vacuum Kraft Box',
-    dispatchNotes: 'Delivered and verified by buyer QA laboratory. Eugenol level verified at 82.4%.',
-    requestDate: '2026-10-24',
-    status: 'Delivered',
-  },
-  {
-    id: 'SMPL-104',
-    buyerName: 'Sarah Jenkins',
-    companyName: 'Hudson Botanical Imports LLC',
-    email: 's.jenkins@hudsonbotanicals.com',
-    phone: '+1 212 555 0199',
-    country: 'United States',
-    city: 'New York',
-    postalCode: '10001',
-    shippingAddress: '450 West 33rd Street, Suite 900, New York, NY 10001, United States',
-    courierService: 'DHL Express International',
-    trackingAwb: 'DHL-6219-4822-US',
-    commodity: 'Cassia Vera Cinnamon (Kayu Manis)',
-    grade: 'Grade B (Standard)',
-    sampleWeight: '500 gram (Standard Evaluation Kit)',
-    packagingType: 'Moisture-Proof Sealed Kraft Cylinder',
-    dispatchNotes: 'Awaiting US FDA Prior Notice approval before parcel dispatch.',
-    requestDate: '2026-10-24',
-    status: 'Pending Review',
-  },
-];
+const CURRENT_YEAR = new Date().getFullYear();
 
 /**
  * App Component (Root)
- * Features decoupled tab architecture (Monitoring vs. Dedicated Form),
- * upgraded courier shipping addresses, full dependent grade taxonomy,
- * and interactive Sample Request Detail Dossier Modal.
+ * Fullstack React portal integrated with NestJS MVC REST API (http://localhost:3000/samples).
  */
 export default function App() {
-  // Main state holding the list of sample requests
-  const [samples, setSamples] = useState(initialSampleData);
-
-  // Active view tab: 'monitoring' | 'form'
+  const [samples, setSamples] = useState([]);
   const [activeTab, setActiveTab] = useState('monitoring');
-
-  // Selected sample for Detail Dossier Modal
   const [selectedSample, setSelectedSample] = useState(null);
-
-  // Notification message state
   const [notification, setNotification] = useState('');
+  const [notificationType, setNotificationType] = useState('success');
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState('');
+  const notificationTimerRef = useRef(null);
 
-  // Show temporary feedback toast banner
-  const triggerNotification = (message) => {
+  const triggerNotification = (message, type = 'success') => {
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current);
+    }
     setNotification(message);
-    setTimeout(() => {
+    setNotificationType(type);
+    notificationTimerRef.current = setTimeout(() => {
       setNotification('');
-    }, 4000);
+    }, 4500);
   };
 
-  // Handler: Add a new sample request
-  const handleAddSample = (newSample) => {
-    setSamples((prev) => [newSample, ...prev]);
-    // Automatically switch to monitoring tab to view newly added item
+  const loadSamples = async () => {
+    setIsLoading(true);
+    setApiError('');
+    try {
+      const data = await getSamples();
+      setSamples(data);
+    } catch (err) {
+      setApiError(
+        err.message ||
+          'Gagal terhubung ke server backend NestJS (http://localhost:3000).',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchInitialSamples() {
+      try {
+        const data = await getSamples();
+        if (!cancelled) {
+          setSamples(data);
+          setApiError('');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setApiError(
+            err.message ||
+              'Gagal terhubung ke server backend NestJS (http://localhost:3000).',
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchInitialSamples();
+
+    return () => {
+      cancelled = true;
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Handler: Create new sample via POST /samples
+  const handleAddSample = async (payload) => {
+    const created = await createSample(payload);
+    setSamples((prev) => [created, ...prev]);
     setActiveTab('monitoring');
-    triggerNotification(`Permintaan sampel ${newSample.id} untuk "${newSample.companyName}" (${newSample.country}) berhasil dicatat.`);
+    triggerNotification(
+      `Permintaan sampel ${created.id} untuk "${created.companyName}" (${created.country}) berhasil dicatat ke server.`,
+      'success',
+    );
+    return created;
   };
 
-  // Handler: Delete a sample request
-  const handleDeleteSample = (id) => {
+  // Handler: Delete sample via DELETE /samples/:id
+  const handleDeleteSample = async (id) => {
     const target = samples.find((item) => item.id === id);
-    setSamples((prev) => prev.filter((item) => item.id !== id));
-    if (selectedSample && selectedSample.id === id) {
-      setSelectedSample(null);
-    }
-    if (target) {
-      triggerNotification(`Permintaan ${id} (${target.companyName}) berhasil dihapus.`);
+    try {
+      await deleteSample(id);
+      setSamples((prev) => prev.filter((item) => item.id !== id));
+      if (selectedSample && selectedSample.id === id) {
+        setSelectedSample(null);
+      }
+      if (target) {
+        triggerNotification(
+          `Permintaan ${id} (${target.companyName}) berhasil dihapus dari backend.`,
+          'success',
+        );
+      }
+    } catch (err) {
+      triggerNotification(err.message || 'Gagal menghapus data sampel.', 'error');
     }
   };
 
-  // Handler: Cycle through lifecycle stages from card button
-  const handleToggleStatus = (id) => {
-    setSamples((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          let nextStatus = 'Shipped / Dispatched';
-          if (item.status === 'Pending Review') nextStatus = 'Shipped / Dispatched';
-          else if (item.status === 'Shipped / Dispatched') nextStatus = 'Delivered';
-          else nextStatus = 'Pending Review';
+  // Handler: Cycle lifecycle status via PATCH /samples/:id
+  const handleToggleStatus = async (id) => {
+    const target = samples.find((item) => item.id === id);
+    if (!target) return;
 
-          triggerNotification(`Status ${item.id} diperbarui menjadi "${nextStatus}".`);
-          return { ...item, status: nextStatus };
-        }
-        return item;
-      })
-    );
+    let nextStatus = 'Shipped / Dispatched';
+    if (target.status === 'Pending Review') nextStatus = 'Shipped / Dispatched';
+    else if (target.status === 'Shipped / Dispatched') nextStatus = 'Delivered';
+    else nextStatus = 'Pending Review';
+
+    try {
+      const updated = await updateSample(id, { status: nextStatus });
+      setSamples((prev) =>
+        prev.map((item) => (item.id === id ? updated : item)),
+      );
+      if (selectedSample && selectedSample.id === id) {
+        setSelectedSample(updated);
+      }
+      triggerNotification(
+        `Status ${updated.id} diperbarui menjadi "${updated.status}".`,
+        'success',
+      );
+    } catch (err) {
+      triggerNotification(err.message || 'Gagal memperbarui status sampel.', 'error');
+    }
   };
 
-  // Handler: Explicit status & notes update from Detail Dossier Modal
-  const handleUpdateSampleStatus = (id, newStatus, newNotes) => {
-    setSamples((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            status: newStatus,
-            dispatchNotes: newNotes !== undefined ? newNotes : item.dispatchNotes,
-          };
-        }
-        return item;
-      })
-    );
-
-    if (selectedSample && selectedSample.id === id) {
-      setSelectedSample((prev) => ({
-        ...prev,
+  // Handler: Update status & notes from Detail Dossier Modal via PATCH /samples/:id
+  const handleUpdateSampleStatus = async (id, newStatus, newNotes) => {
+    try {
+      const updated = await updateSample(id, {
         status: newStatus,
-        dispatchNotes: newNotes !== undefined ? newNotes : prev.dispatchNotes,
-      }));
+        dispatchNotes: newNotes,
+      });
+
+      setSamples((prev) =>
+        prev.map((item) => (item.id === id ? updated : item)),
+      );
+
+      if (selectedSample && selectedSample.id === id) {
+        setSelectedSample(updated);
+      }
+
+      triggerNotification(
+        `Status dossier ${updated.id} berhasil diperbarui menjadi "${updated.status}".`,
+        'success',
+      );
+      return updated;
+    } catch (err) {
+      triggerNotification(err.message || 'Gagal menyimpan pembaruan dossier.', 'error');
+      throw err;
     }
-
-    triggerNotification(`Status dossier ${id} berhasil diperbarui menjadi "${newStatus}".`);
   };
 
-  // Handler: Clear all items (to easily test empty state)
-  const handleClearAll = () => {
-    setSamples([]);
-    setSelectedSample(null);
-    triggerNotification('Semua antrean sampel telah dikosongkan untuk pengujian.');
+  // Handler: Delete all items on backend (to test empty state)
+  const handleClearAll = async () => {
+    try {
+      await Promise.all(samples.map((item) => deleteSample(item.id)));
+      setSamples([]);
+      setSelectedSample(null);
+      triggerNotification(
+        'Semua antrean sampel telah dikosongkan pada server untuk pengujian.',
+        'success',
+      );
+    } catch (err) {
+      triggerNotification(err.message || 'Gagal mengosongkan antrean.', 'error');
+    }
   };
 
-  // Handler: Restore initial seed data
-  const handleResetInitial = () => {
-    setSamples(initialSampleData);
-    setSelectedSample(null);
-    triggerNotification('Data sampel awal B2B berhasil dimuat kembali.');
+  // Handler: Restore initial seed data via POST /samples/reset
+  const handleResetInitial = async () => {
+    try {
+      const restored = await resetSamples();
+      setSamples(restored);
+      setSelectedSample(null);
+      setApiError('');
+      triggerNotification(
+        'Data sampel awal B2B berhasil dipulihkan dari backend NestJS.',
+        'success',
+      );
+    } catch (err) {
+      triggerNotification(err.message || 'Gagal memulihkan data awal.', 'error');
+    }
   };
 
   return (
@@ -230,9 +242,27 @@ export default function App() {
       <main className="main-content">
         {/* Dynamic Notification Toast */}
         {notification && (
-          <div className="portal-notification" role="alert">
+          <div
+            className="portal-notification"
+            role="alert"
+            style={
+              notificationType === 'error'
+                ? {
+                    background: '#fef2f2',
+                    borderColor: '#fecaca',
+                    color: '#991b1b',
+                  }
+                : undefined
+            }
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <i className="bi bi-check-circle-fill fs-5"></i>
+              <i
+                className={`bi ${
+                  notificationType === 'error'
+                    ? 'bi-exclamation-triangle-fill'
+                    : 'bi-check-circle-fill'
+                } fs-5`}
+              ></i>
               <span>{notification}</span>
             </div>
             <button
@@ -252,6 +282,35 @@ export default function App() {
           </div>
         )}
 
+        {/* API Connection Error Banner */}
+        {apiError && (
+          <div
+            className="portal-notification"
+            role="alert"
+            style={{
+              background: '#fef2f2',
+              borderColor: '#fecaca',
+              color: '#991b1b',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <i className="bi bi-wifi-off fs-5"></i>
+              <span>
+                <strong>Koneksi Backend Gagal:</strong> {apiError}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn-action-status"
+              onClick={loadSamples}
+              id="btn-retry-api"
+              style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+            >
+              <i className="bi bi-arrow-clockwise me-1"></i> Muat Ulang dari API
+            </button>
+          </div>
+        )}
+
         {/* View 1: Monitoring & Tracking Dashboard */}
         {activeTab === 'monitoring' && (
           <div className="tab-view-monitoring">
@@ -261,8 +320,10 @@ export default function App() {
             {/* Test Helper Bar */}
             <div className="monitoring-test-bar">
               <span className="text-muted small">
-                <i className="bi bi-info-circle me-1"></i>
-                Total {samples.length} permintaan sampel dalam sistem monitoring.
+                <i className="bi bi-hdd-network me-1"></i>
+                {isLoading
+                  ? 'Memuat data sampel dari NestJS API...'
+                  : `Total ${samples.length} permintaan sampel tersinkronisasi dengan NestJS API.`}
               </span>
 
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -277,7 +338,7 @@ export default function App() {
                     <i className="bi bi-trash3 me-1"></i> Kosongkan Antrean (Uji Empty State)
                   </button>
                 )}
-                {samples.length === 0 && (
+                {samples.length === 0 && !isLoading && (
                   <button
                     type="button"
                     className="btn-action-status"
@@ -291,8 +352,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* Conditional Rendering: Empty State vs. Full Width Grid */}
-            {samples.length === 0 ? (
+            {/* Loading Indicator vs Empty State vs Full Width Grid */}
+            {isLoading ? (
+              <div className="empty-state-modern-card" role="status">
+                <div className="empty-state__icon-wrap">
+                  <i className="bi bi-arrow-repeat"></i>
+                </div>
+                <h3 className="empty-state__title font-serif">
+                  Menghubungkan ke Backend NestJS...
+                </h3>
+                <p className="empty-state__desc">
+                  Sedang mengambil daftar permintaan sampel ekspor dari server API{' '}
+                  <code>http://localhost:3000/samples</code>.
+                </p>
+              </div>
+            ) : samples.length === 0 ? (
               <EmptyState
                 onSwitchTab={setActiveTab}
                 onResetData={handleResetInitial}
@@ -322,6 +396,7 @@ export default function App() {
       {/* Interactive Detail Dossier Modal */}
       {selectedSample && (
         <SampleDetailModal
+          key={`${selectedSample.id}-${selectedSample.status}`}
           sample={selectedSample}
           onClose={() => setSelectedSample(null)}
           onUpdateStatus={handleUpdateSampleStatus}
@@ -331,7 +406,9 @@ export default function App() {
       {/* Footer */}
       <footer className="portal-footer">
         <p>
-          &copy; {new Date().getFullYear()} <strong>Ryco Spices International Trade Desk</strong> · B2B Sample Tracking &amp; Monitoring System (Bab 6: React Dasar)
+          &copy; {CURRENT_YEAR}{' '}
+          <strong>Ryco Spices International Trade Desk</strong> · B2B Sample
+          Tracking &amp; Monitoring System (Bab 9: Fullstack React + NestJS MVC)
         </p>
       </footer>
     </div>

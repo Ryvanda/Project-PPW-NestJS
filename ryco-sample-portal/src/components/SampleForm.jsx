@@ -6,35 +6,44 @@ import {
   SAMPLE_WEIGHT_OPTIONS,
 } from '../constants/spices';
 
+const WEIGHT_GRAMS_MAP = {
+  '250 gram (Micro-Sample Kit)': 250,
+  '500 gram (Standard Evaluation Kit)': 500,
+  '1000 gram (1 kg Comparative Box)': 1000,
+  '2000 gram (2 kg Pilot Lot)': 2000,
+};
+
 /**
  * SampleForm Component (Controlled Component)
- * Supports two-tier dependent dropdown (Commodity -> Grades),
- * full courier shipping address, and global country selection.
+ * Submits validated sample request payloads directly to the NestJS backend API.
  * @param {{ onAddSample: Function, onCancel: Function }} props
  */
 export default function SampleForm({ onAddSample, onCancel }) {
   const initialCommodity = COMMODITY_OPTIONS[0];
   const initialGrade = COMMODITY_GRADES[initialCommodity][0];
 
-  // Controlled form state
   const [formData, setFormData] = useState({
     buyerName: '',
     companyName: '',
+    email: '',
+    trackingAwb: '',
     country: '',
     shippingAddress: '',
     commodity: initialCommodity,
     grade: initialGrade,
-    sampleWeight: SAMPLE_WEIGHT_OPTIONS[1], // default "500 gram"
+    sampleWeight: SAMPLE_WEIGHT_OPTIONS[1],
+    requiresCoa: true,
   });
 
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle generic input changes
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
 
     if (errors[name]) {
@@ -43,9 +52,11 @@ export default function SampleForm({ onAddSample, onCancel }) {
         [name]: '',
       }));
     }
+    if (submitError) {
+      setSubmitError('');
+    }
   };
 
-  // Handle dependent Commodity selection change
   const handleCommodityChange = (e) => {
     const selectedCommodity = e.target.value;
     const availableGrades = COMMODITY_GRADES[selectedCommodity] || [];
@@ -64,13 +75,15 @@ export default function SampleForm({ onAddSample, onCancel }) {
         grade: '',
       }));
     }
+    if (submitError) {
+      setSubmitError('');
+    }
   };
 
-  // Submit handler
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
 
-    // Field validations
     const newErrors = {};
     if (!formData.buyerName.trim()) {
       newErrors.buyerName = 'Nama PIC / Buyer wajib diisi.';
@@ -82,7 +95,8 @@ export default function SampleForm({ onAddSample, onCancel }) {
       newErrors.country = 'Negara tujuan wajib dipilih.';
     }
     if (!formData.shippingAddress.trim()) {
-      newErrors.shippingAddress = 'Alamat lengkap kurir pengiriman sampel wajib diisi.';
+      newErrors.shippingAddress =
+        'Alamat lengkap kurir pengiriman sampel wajib diisi.';
     }
     if (!formData.commodity.trim()) {
       newErrors.commodity = 'Komoditas rempah wajib dipilih.';
@@ -96,41 +110,50 @@ export default function SampleForm({ onAddSample, onCancel }) {
       return;
     }
 
-    // Construct entity object with complete B2B export dossier coordinates
-    const newSample = {
-      id: `SMPL-${Date.now().toString().slice(-4)}`,
+    const weightGrams = WEIGHT_GRAMS_MAP[formData.sampleWeight] || 500;
+    const payload = {
       buyerName: formData.buyerName.trim(),
       companyName: formData.companyName.trim(),
-      email: `${formData.buyerName.trim().toLowerCase().replace(/\s+/g, '.')}@${formData.companyName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
-      phone: '+62 812-3456-7890',
       country: formData.country.trim(),
-      city: 'Destination City',
-      postalCode: '10001',
       shippingAddress: formData.shippingAddress.trim(),
-      courierService: 'DHL Express International',
-      trackingAwb: `DHL-${Date.now().toString().slice(-6)}-ID`,
       commodity: formData.commodity,
       grade: formData.grade,
+      weightGrams,
       sampleWeight: formData.sampleWeight,
-      packagingType: 'Vacuum-Sealed Foil Bag + Outer Rigid Export Box',
-      dispatchNotes: 'Permintaan sampel baru dicatat. Menunggu verifikasi tim logistik dan penerbitan COA.',
+      requiresCoa: Boolean(formData.requiresCoa),
       requestDate: new Date().toISOString().split('T')[0],
-      status: 'Pending Review',
     };
 
-    onAddSample(newSample);
+    if (formData.email.trim()) {
+      payload.email = formData.email.trim();
+    }
+    if (formData.trackingAwb.trim()) {
+      payload.trackingAwb = formData.trackingAwb.trim();
+    }
 
-    // Reset form
-    setFormData({
-      buyerName: '',
-      companyName: '',
-      country: '',
-      shippingAddress: '',
-      commodity: initialCommodity,
-      grade: initialGrade,
-      sampleWeight: SAMPLE_WEIGHT_OPTIONS[1],
-    });
-    setErrors({});
+    setIsSubmitting(true);
+    try {
+      await onAddSample(payload);
+      setFormData({
+        buyerName: '',
+        companyName: '',
+        email: '',
+        trackingAwb: '',
+        country: '',
+        shippingAddress: '',
+        commodity: initialCommodity,
+        grade: initialGrade,
+        sampleWeight: SAMPLE_WEIGHT_OPTIONS[1],
+        requiresCoa: true,
+      });
+      setErrors({});
+    } catch (err) {
+      setSubmitError(
+        err.message || 'Gagal mengirim permintaan sampel ke server backend.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const currentAvailableGrades = COMMODITY_GRADES[formData.commodity] || [];
@@ -147,10 +170,29 @@ export default function SampleForm({ onAddSample, onCancel }) {
               Catat Permintaan Sampel Baru
             </h2>
             <p className="card-subtitle">
-              Input data pengiriman sampel rempah untuk pengiriman via kurir udara (DHL/FedEx Air-Freight).
+              Input data pengiriman sampel rempah ke backend NestJS untuk pengiriman via kurir udara (DHL/FedEx Air-Freight).
             </p>
           </div>
         </div>
+
+        {submitError && (
+          <div
+            className="portal-notification"
+            role="alert"
+            id="form-api-error"
+            style={{
+              background: '#fef2f2',
+              borderColor: '#fecaca',
+              color: '#991b1b',
+              marginBottom: '1.5rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <i className="bi bi-exclamation-octagon-fill fs-5"></i>
+              <span>{submitError}</span>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           {/* Section 1: Partner & Buyer Info */}
@@ -169,7 +211,7 @@ export default function SampleForm({ onAddSample, onCancel }) {
                   id="buyerName"
                   name="buyerName"
                   className={`form-control ${errors.buyerName ? 'is-invalid' : ''}`}
-                  placeholder="cth. Hans Schneider"
+                  placeholder="cth. Elena Rossi"
                   value={formData.buyerName}
                   onChange={handleChange}
                 />
@@ -185,11 +227,43 @@ export default function SampleForm({ onAddSample, onCancel }) {
                   id="companyName"
                   name="companyName"
                   className={`form-control ${errors.companyName ? 'is-invalid' : ''}`}
-                  placeholder="cth. Bavaria Spices GmbH"
+                  placeholder="cth. Milano Spezie S.r.l."
                   value={formData.companyName}
                   onChange={handleChange}
                 />
                 {errors.companyName && <p className="form-error">{errors.companyName}</p>}
+              </div>
+            </div>
+
+            <div className="form-row-2">
+              <div className="form-group">
+                <label htmlFor="email" className="form-label">
+                  Email Bisnis Importir (Opsional)
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  className="form-control"
+                  placeholder="cth. e.rossi@milanospezie.it"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="trackingAwb" className="form-label">
+                  Nomor Resi / AWB Kurir (Opsional)
+                </label>
+                <input
+                  type="text"
+                  id="trackingAwb"
+                  name="trackingAwb"
+                  className="form-control"
+                  placeholder="Kosongkan untuk generate otomatis oleh server"
+                  value={formData.trackingAwb}
+                  onChange={handleChange}
+                />
               </div>
             </div>
           </div>
@@ -283,6 +357,33 @@ export default function SampleForm({ onAddSample, onCancel }) {
                 {errors.country && <p className="form-error">{errors.country}</p>}
               </div>
             </div>
+
+            <div className="form-group" style={{ marginTop: '0.25rem', marginBottom: 0 }}>
+              <label
+                htmlFor="requiresCoa"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  cursor: 'pointer',
+                  fontSize: '0.88rem',
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="requiresCoa"
+                  name="requiresCoa"
+                  checked={formData.requiresCoa}
+                  onChange={handleChange}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--forest)' }}
+                />
+                <span>
+                  Sertakan Sertifikat Analisis Laboratorium (COA &amp; Uji Aflatoksin)
+                </span>
+              </label>
+            </div>
           </div>
 
           {/* Section 3: Full Courier Shipping Address */}
@@ -300,7 +401,7 @@ export default function SampleForm({ onAddSample, onCancel }) {
                 name="shippingAddress"
                 rows="3"
                 className={`form-control ${errors.shippingAddress ? 'is-invalid' : ''}`}
-                placeholder="Contoh: Industriestrasse 42, Speicherstadt Warehouse #4, 20457 Hamburg, Germany"
+                placeholder="Contoh: Via Torino 88, Suite 4B, 20123 Milano, Italy"
                 value={formData.shippingAddress}
                 onChange={handleChange}
               ></textarea>
@@ -308,7 +409,7 @@ export default function SampleForm({ onAddSample, onCancel }) {
                 <p className="form-error">{errors.shippingAddress}</p>
               )}
               <p className="form-help-text">
-                Wajib mencantumkan nama jalan, gedung/gudang, kode pos, dan kota tujuan untuk pencetakan Airway Bill (AWB).
+                Wajib mencantumkan nama jalan, gedung/gudang, kode pos, dan kota tujuan minimal 10 karakter untuk pencetakan Airway Bill (AWB).
               </p>
             </div>
           </div>
@@ -320,6 +421,7 @@ export default function SampleForm({ onAddSample, onCancel }) {
               className="btn-secondary-action"
               onClick={onCancel}
               id="btn-cancel-form"
+              disabled={isSubmitting}
             >
               <i className="bi bi-arrow-left"></i>
               Batal / Kembali ke Monitoring
@@ -328,9 +430,10 @@ export default function SampleForm({ onAddSample, onCancel }) {
               type="submit"
               className="btn-primary-action"
               id="btn-submit-sample"
+              disabled={isSubmitting}
             >
               <i className="bi bi-check2-circle"></i>
-              Catat Permintaan Sampel
+              {isSubmitting ? 'Menyimpan ke Server...' : 'Catat Permintaan Sampel'}
             </button>
           </div>
         </form>
